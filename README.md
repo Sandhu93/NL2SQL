@@ -7,6 +7,58 @@ A comprehensive tutorial for building Natural Language to SQL applications using
 **Status**: Active Development  
 **Current Version**: 0.0.1 (dev)
 
+## Learning Resources & Attribution
+
+This project follows the comprehensive tutorial **"Mastering Natural Language to SQL with LangChain"** by Pradip Nichite:
+
+- 📝 **Tutorial Blog**: [FutureSmart AI - NL2SQL with LangChain](https://blog.futuresmart.ai/mastering-natural-language-to-sql-with-langchain-nl2sql)
+- 📺 **Video Tutorial**: [YouTube - NL2SQL Tutorial](https://www.youtube.com/watch?v=fss6CrmQU2Y)
+- 💻 **Reference Notebook**: [GitHub - Langchain_NL2SQL_2024.ipynb](https://github.com/PradipNichite/Youtube-Tutorials/blob/main/Langchain_NL2SQL_2024.ipynb)
+
+### What You'll Learn
+
+This tutorial covers building production-ready NL2SQL systems from basics to advanced concepts:
+
+1. **Building a Basic NL2SQL Model**
+   - Understanding NL2SQL fundamentals
+   - Setting up LangChain with OpenAI integration
+   - Creating your first natural language query
+   - Executing SQL and viewing results
+
+2. **Rephrasing Answers for Enhanced Clarity**
+   - Converting raw SQL results to natural language responses
+   - Using prompt templates for user-friendly output
+   - Implementing answer rephrasing with LangChain chains
+
+3. **Enhancing Models with Few-Shot Learning**
+   - Incorporating example queries for better accuracy
+   - Creating few-shot learning templates
+   - Improving model understanding with curated examples
+
+4. **Dynamic Few-Shot Example Selection**
+   - Semantic similarity-based example selection
+   - Using vector embeddings (ChromaDB/FAISS) for context matching
+   - Tailoring examples to query context automatically
+
+5. **Dynamic Relevant Table Selection**
+   - Optimizing for databases with 100+ tables
+   - Reducing prompt token usage and costs
+   - Improving performance with focused table selection
+   - Using table descriptions for intelligent filtering
+
+6. **Adding Memory for Conversational Context**
+   - Implementing chat message history
+   - Handling follow-up questions intelligently
+   - Maintaining conversational context across queries
+   - Building interactive chatbot experiences
+
+### Tutorial Author
+
+**Pradip Nichite** - Top Rated Plus NLP freelancer and founder of FutureSmart AI
+- Specializes in custom NLP solutions using LangChain, Transformers, and Vector Databases
+- YouTube Channel: [@aidemos.videos](https://www.youtube.com/@aidemos.videos)
+- Website: [aidemos.com](http://aidemos.com/)
+
 ## System Requirements
 
 ### Python Version
