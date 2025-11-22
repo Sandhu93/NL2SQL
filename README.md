@@ -142,14 +142,77 @@ NL2SQL_tutorial/
 ├── venv/                          # Virtual environment (Python 3.11)
 ├── .env                           # Environment variables (not in git)
 ├── .gitignore                     # Git ignore rules
-├── AI_AGENT_RULES.md              # AI coding guidelines
-├── DEVELOPMENT_RULES.md           # Development guidelines
-├── Langchain_NL2SQL_2024.ipynb    # Main tutorial notebook
-├── main.py                        # Database connection & setup
-├── requirements.txt               # Python dependencies (129 packages)
-├── nl2sql.log                     # Application logs
-└── README.md                      # This file
+├── .pytest_cache/                 # Pytest cache directory
+├── __pycache__/                   # Python bytecode cache
+│
+├── app/                           # Main application package
+│   ├── __init__.py               
+│   ├── db/                        # Database layer
+│   │   ├── __init__.py
+│   │   └── database_manager.py    # MySQL connection & utilities
+│   ├── services/                  # Business logic layer
+│   │   ├── __init__.py
+│   │   └── nl2sql_service.py      # NL2SQL conversion service
+│   └── utils/                     # Utility modules
+│       ├── __init__.py
+│       ├── constants.py           # Application constants
+│       ├── env_loader.py          # Environment variable management
+│       └── logging_config.py      # Logging configuration
+│
+├── tests/                         # Comprehensive test suite
+│   ├── conftest.py               # Pytest fixtures and configuration
+│   ├── pytest.log                # Test execution logs
+│   ├── unit/                     # Unit tests (isolated component testing)
+│   │   ├── test_database_manager.py
+│   │   ├── test_env_loader.py
+│   │   ├── test_logging_config.py
+│   │   └── test_nl2sql_service.py
+│   ├── integration/              # Integration tests (component interaction)
+│   │   ├── test_main_integration.py
+│   │   └── test_service_database_integration.py
+│   ├── test_config.py           # Legacy test files
+│   ├── test_database.py
+│   ├── test_integration.py
+│   ├── test_main.py
+│   └── test_openai.py
+│
+├── AI_AGENT_RULES.md             # AI coding guidelines & testing strategy
+├── DEVELOPMENT_RULES.md          # Development standards & git workflow
+├── TESTING.md                    # Comprehensive testing documentation
+├── Langchain_NL2SQL_2024.ipynb   # Main tutorial notebook
+├── main.py                       # Application entry point
+├── run_tests.py                  # Test execution script
+├── pytest.ini                    # Pytest configuration
+├── requirements.txt              # Python dependencies (129 packages)
+├── nl2sql.log                    # Application logs
+└── README.md                     # This file
 ```
+
+### Architecture Layers
+
+**1. Database Layer (`app/db/`)**
+- MySQL connection management
+- Database URI construction
+- Schema exploration utilities
+- Connection validation
+
+**2. Services Layer (`app/services/`)**
+- NL2SQL conversion logic
+- Query chain creation
+- Query execution
+- Result processing
+
+**3. Utilities Layer (`app/utils/`)**
+- Environment variable loading & validation
+- Logging configuration & setup
+- Application constants
+- Reusable helper functions
+
+**4. Testing Layer (`tests/`)**
+- **Unit Tests**: Isolated component testing with mocks
+- **Integration Tests**: End-to-end workflow testing
+- **Fixtures**: Reusable test data and mocks in `conftest.py`
+- **Coverage**: Comprehensive test coverage with pytest
 
 ## Environment Setup
 
@@ -185,6 +248,18 @@ If your database password contains special characters like `#`, `@`, `%`, etc., 
 The application automatically validates all required environment variables on startup and provides clear error messages for missing configurations.
 
 ## Usage
+
+### Running the Application
+
+The main entry point is `main.py`, which provides a complete NL2SQL pipeline demonstration:
+
+```bash
+# Activate virtual environment
+venv\Scripts\activate
+
+# Run the application
+python main.py
+```
 
 ### Current Implementation: NL2SQL Query System
 The current `main.py` provides a complete NL2SQL pipeline:
@@ -298,6 +373,7 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 ## Current Features
 
 ### ✅ Implemented
+- **Layered Architecture**: Clean separation of database, services, and utilities layers
 - **Database Connection**: Robust MySQL connection with error handling
 - **Environment Management**: Secure credential management via .env files
 - **Schema Exploration**: Complete database schema analysis and display
@@ -309,6 +385,7 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **Password Security**: URL encoding/decoding for special characters
 - **Connection Validation**: Automatic database connection testing
 - **Multiple Vector Stores**: ChromaDB, FAISS, and LangChain Chroma support
+- **Testing Suite**: Comprehensive unit and integration tests with pytest
 
 ### 🚧 In Development
 - Interactive query interface
@@ -349,10 +426,35 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - Document functions and classes
 
 ### Testing
-Run tests with:
+The project includes a comprehensive test suite with both unit and integration tests:
+
 ```bash
+# Run all tests
 python -m pytest
+
+# Run with verbose output
+python -m pytest -v
+
+# Run specific test file
+python -m pytest tests/unit/test_database_manager.py
+
+# Run with coverage report
+python -m pytest --cov=app --cov-report=html
+
+# Run only unit tests
+python -m pytest tests/unit/
+
+# Run only integration tests
+python -m pytest tests/integration/
 ```
+
+**Test Coverage:**
+- ✅ **Unit Tests**: Database manager, environment loader, logging config, NL2SQL service
+- ✅ **Integration Tests**: End-to-end workflow, service-database interaction
+- ✅ **Fixtures**: Comprehensive mocking in `conftest.py`
+- 📊 **Target Coverage**: 80%+ for all modules
+
+See `TESTING.md` for detailed testing guidelines and `AI_AGENT_RULES.md` for testing strategy.
 
 ## Contributing
 
@@ -374,17 +476,20 @@ For issues and questions:
 
 ## Development Guidelines
 
-This project includes comprehensive development rules:
-- **AI_AGENT_RULES.md**: Guidelines for AI agents working on this project
-- **DEVELOPMENT_RULES.md**: General development standards and practices
+This project includes comprehensive development documentation:
+- **AI_AGENT_RULES.md**: Guidelines for AI agents, testing strategy, and code quality standards
+- **DEVELOPMENT_RULES.md**: Development standards, git workflow, and versioning rules
+- **TESTING.md**: Comprehensive testing documentation, fixtures, and test patterns
 
 ### Code Quality Standards
 - Python 3.11 required
-- Type hints mandatory
+- Type hints mandatory for all functions
 - Comprehensive error handling
-- Detailed logging
+- Detailed logging with structured format
 - Environment variable validation
-- Security-first approach
+- Security-first approach (no hardcoded credentials)
+- PEP 8 compliance
+- Comprehensive docstrings for all modules, classes, and functions
 
 ## Version History
 
