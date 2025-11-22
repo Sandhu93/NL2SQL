@@ -1,0 +1,119 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+pyvenv.cfg
+
+# Environment Variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation
+docs/_build/
+.readthedocs.yml
+
+# API Keys and Secrets
+config/secrets.yaml
+secrets.json
+*.pem
+*.key
+
+# Temporary Files
+*.tmp
+*.temp
+.tmp/
+
+# ChromaDB
+chroma_db/
+.chroma/
+
+# Model files (if using local models)
+models/
+*.model
+*.bin
+
+# Test outputs and reports
+test-results/
+.pytest-results/
+test_reports/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Large data files (optional - uncomment if needed)
+# data/
+# *.csv
+# *.xlsx
+
+# Notebook outputs (keep notebooks but ignore outputs)
+*.ipynb_checkpoints/
