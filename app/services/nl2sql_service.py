@@ -17,10 +17,16 @@ from typing import List, Optional
 from langchain.chains import create_sql_query_chain
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.utilities.sql_database import SQLDatabase
+from langchain_core.example_selectors import SemanticSimilarityExampleSelector
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    FewShotChatMessagePromptTemplate,
+    PromptTemplate,
+)
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 
 # Constants
 DEFAULT_MODEL_NAME = "gpt-3.5-turbo"
@@ -31,6 +37,24 @@ TEST_QUERIES = [
     "List all offices in the USA"
 ]
 REFINED_TEST_QUESTION = "How many customers have an order count greater than 5?"
+FEW_SHOT_EXAMPLES = [
+    {
+        "input": "List all customers in France with a credit limit over 20,000.",
+        "query": "SELECT * FROM customers WHERE country = 'France' AND creditLimit > 20000;",
+    },
+    {
+        "input": "Get the highest payment amount made by any customer.",
+        "query": "SELECT MAX(amount) FROM payments;",
+    },
+    {
+        "input": "How many products cost more than $100?",
+        "query": "SELECT COUNT(*) FROM products WHERE buyPrice > 100;",
+    },
+    {
+        "input": "Show the names of employees in the sales department.",
+        "query": "SELECT firstName, lastName FROM employees WHERE jobTitle LIKE '%Sales%';",
+    },
+]
 ANSWER_PROMPT = PromptTemplate.from_template(
     """Given the following user question, corresponding SQL query, and SQL result, answer the user question.
 
@@ -80,6 +104,65 @@ class NL2SQLService:
         )
         
         logger.info(f"NL2SQL service initialized with model: {model_name}")
+
+    def build_few_shot_prompt(
+        self,
+        examples: Optional[List[dict]] = None,
+        use_dynamic_selector: bool = False,
+        k: int = 2,
+    ) -> ChatPromptTemplate:
+        """
+        Build a ChatPromptTemplate with few-shot examples for SQL generation.
+        
+        Args:
+            examples: Optional list of example dicts with 'input' and 'query'.
+            use_dynamic_selector: Whether to use semantic similarity selection.
+            k: Number of examples to select when using dynamic selector.
+        
+        Returns:
+            ChatPromptTemplate: Prompt configured with few-shot examples.
+        """
+        selected_examples = examples or FEW_SHOT_EXAMPLES
+        example_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("human", "{input}\nSQLQuery:"),
+                ("ai", "{query}"),
+            ]
+        )
+        
+        if use_dynamic_selector:
+            # Dynamic selector placeholder; enables future semantic similarity selection.
+            selector = SemanticSimilarityExampleSelector.from_examples(
+                selected_examples,
+                OpenAIEmbeddings(),
+                k=k,
+                input_keys=["input"],
+            )
+            few_shot = FewShotChatMessagePromptTemplate(
+                example_prompt=example_prompt,
+                example_selector=selector,
+                input_variables=["input"],
+            )
+        else:
+            few_shot = FewShotChatMessagePromptTemplate(
+                example_prompt=example_prompt,
+                examples=selected_examples,
+                input_variables=["input"],
+            )
+        
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "You are a MySQL expert. Given an input question, create a syntactically "
+                    "correct MySQL query to run. Use the provided examples as guidance.\n\n"
+                    "Table context:\n{table_info}\n\nUse up to {top_k} relevant tables.",
+                ),
+                few_shot,
+                ("human", "{input}"),
+            ]
+        )
+        return prompt
     
     def generate_sql(self, question: str) -> str:
         """
@@ -144,6 +227,69 @@ class NL2SQLService:
         sql_query = self.generate_sql(question)
         result = self.execute_query(sql_query)
         return sql_query, result
+
+    def generate_sql_with_examples(
+        self,
+        question: str,
+        use_dynamic_selector: bool = False,
+        k: int = 2,
+    ) -> str:
+        """
+        Generate SQL using few-shot examples to guide the model.
+        
+        Args:
+            question: Natural language question
+            use_dynamic_selector: Whether to select examples dynamically
+            k: Number of examples to select when dynamic selection is enabled
+        
+        Returns:
+            str: Generated SQL query
+        """
+        if not question or not question.strip():
+            raise ValueError("Question cannot be empty")
+        
+        prompt = self.build_few_shot_prompt(
+            use_dynamic_selector=use_dynamic_selector,
+            k=k,
+        )
+        try:
+            logger.info("Generating SQL with few-shot examples")
+            chain = prompt | self.llm | StrOutputParser()
+            table_info = self.db.get_table_info()
+            generated_query = chain.invoke(
+                {"input": question, "table_info": table_info, "top_k": k}
+            )
+            logger.info("SQL query generated with few-shot examples")
+            return generated_query
+        except Exception as exc:
+            logger.error(f"Failed to generate SQL with examples: {exc}")
+            raise
+
+    def process_question_few_shot(
+        self,
+        question: str,
+        use_dynamic_selector: bool = False,
+        k: int = 2,
+    ) -> dict:
+        """
+        Generate SQL with few-shot examples, execute it, and return results.
+        
+        Args:
+            question: Natural language question
+            use_dynamic_selector: Whether to use dynamic example selection
+            k: Number of examples to select when dynamic selection is enabled
+        
+        Returns:
+            dict: Dictionary containing 'sql', 'result', and 'answer'
+        """
+        sql_query = self.generate_sql_with_examples(
+            question,
+            use_dynamic_selector=use_dynamic_selector,
+            k=k,
+        )
+        result = self.execute_query(sql_query)
+        answer = self.rephrase_answer(question, sql_query, result)
+        return {"sql": sql_query, "result": result, "answer": answer}
 
     def rephrase_answer(self, question: str, sql_query: str, result: str) -> str:
         """
@@ -290,14 +436,15 @@ def interactive_query_runner(db: SQLDatabase) -> None:
         print("Options:")
         print("  1) Run first query demo (includes additional samples)")
         print("  2) Run refined query with your own question")
-        print("  3) Exit interactive mode")
+        print("  3) Run refined query with few-shot guidance")
+        print("  4) Exit interactive mode")
         print("-"*60)
         print("Type the option number or 'exit'/'q' to quit.\n")
         
         while True:
-            choice = input("Select an option [1/2/3]: ").strip().lower()
+            choice = input("Select an option [1/2/3/4]: ").strip().lower()
             
-            if choice in {"3", "exit", "q", "quit"}:
+            if choice in {"4", "exit", "q", "quit"}:
                 print("Exiting interactive mode.")
                 logger.info("Interactive mode exited by user")
                 break
@@ -331,7 +478,32 @@ def interactive_query_runner(db: SQLDatabase) -> None:
                     print(f"Error executing refined query: {exc}")
                 continue
             
-            print("Invalid selection. Please choose 1, 2, or 3 (or 'exit').")
+            if choice == "3":
+                question = input(
+                    f"Enter your question for few-shot guidance (default: {REFINED_TEST_QUESTION}): "
+                ).strip()
+                if not question:
+                    question = REFINED_TEST_QUESTION
+                try:
+                    response = nl2sql_service.process_question_few_shot(question)
+                    
+                    print("\nGenerated SQL Query (few-shot):")
+                    print(response["sql"])
+                    print("-"*60)
+                    print("Raw Query Results:")
+                    print(response["result"])
+                    print("-"*60)
+                    print("Rephrased Answer:")
+                    print(response["answer"])
+                    print("="*60 + "\n")
+                    
+                    logger.info("Interactive few-shot refined query executed successfully")
+                except Exception as exc:
+                    logger.error(f"Interactive few-shot query failed: {exc}")
+                    print(f"Error executing few-shot query: {exc}")
+                continue
+            
+            print("Invalid selection. Please choose 1, 2, 3, or 4 (or 'exit').")
     except Exception as exc:
         logger.error(f"Interactive query runner encountered an error: {exc}")
 

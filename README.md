@@ -31,10 +31,11 @@ This tutorial covers building production-ready NL2SQL systems from basics to adv
    - Implementing answer rephrasing with LangChain chains
    - Integrated RunnablePassthrough for streamlined processing
 
-3. **Enhancing Models with Few-Shot Learning**
+3. **Enhancing Models with Few-Shot Learning** ✅ Implemented
    - Incorporating example queries for better accuracy
-   - Creating few-shot learning templates
+   - Creating few-shot learning templates with FewShotChatMessagePromptTemplate
    - Improving model understanding with curated examples
+   - Building dynamic few-shot prompts with system context
 
 4. **Dynamic Few-Shot Example Selection**
    - Semantic similarity-based example selection
@@ -204,6 +205,8 @@ NL2SQL_tutorial/
 - Result processing
 - Answer rephrasing with prompt templates
 - RunnablePassthrough chain integration
+- Few-shot learning with curated examples
+- Dynamic prompt building with example selectors
 
 **3. Utilities Layer (`app/utils/`)**
 - Environment variable loading & validation
@@ -280,6 +283,7 @@ The current `main.py` provides a complete NL2SQL pipeline with natural language 
 - **Query Execution**: Direct database query execution with results
 - **Answer Rephrasing**: Converts raw SQL results to user-friendly natural language
 - **RunnablePassthrough Chains**: Streamlined processing pipeline
+- **Few-Shot Learning**: Curated example queries guide SQL generation
 - **Interactive Query Runner**: Menu-driven interface for testing queries
 
 ```bash
@@ -304,7 +308,8 @@ python main.py
 - **Interactive Query Runner**: Menu-driven interface
   - Option 1: Run first query demo with additional samples
   - Option 2: Enter your own natural language questions
-  - Option 3: Exit interactive mode
+  - Option 3: Use few-shot learning guidance for improved SQL generation
+  - Option 4: Exit interactive mode
   - Real-time query processing with SQL generation, execution, and answer rephrasing
 
 ### Query Examples Working Now
@@ -323,11 +328,24 @@ python main.py
 
 # Interactive Query Runner
 User interaction:
-  Select an option [1/2/3]: 2
+  Select an option [1/2/3/4]: 2
   Enter your question: How many products are in stock?
   → Generated SQL Query: SELECT COUNT(*) FROM products WHERE quantityInStock > 0
   → Raw Query Results: [(110,)]
   → Rephrased Answer: There are 110 products currently in stock.
+
+# Few-Shot Learning
+Curated examples guide the model:
+  Example 1: "List all customers in France with a credit limit over 20,000"
+  → SELECT * FROM customers WHERE country = 'France' AND creditLimit > 20000;
+  
+  Example 2: "Get the highest payment amount made by any customer"
+  → SELECT MAX(amount) FROM payments;
+  
+User query with few-shot guidance (Option 3):
+  Enter your question: Show me products that cost more than $150
+  → Generated SQL Query: SELECT * FROM products WHERE buyPrice > 150;
+  → Uses example patterns for better accuracy
 ```
 
 ### Future Implementations (Coming Soon)
@@ -411,6 +429,8 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **Answer Rephrasing**: Convert raw SQL results to natural language responses
 - **Prompt Templates**: User-friendly answer formatting with LangChain prompts
 - **RunnablePassthrough Chains**: Streamlined query-to-answer pipeline
+- **Few-Shot Learning**: Curated example queries improve SQL generation accuracy
+- **FewShotChatMessagePromptTemplate**: LangChain few-shot prompt integration
 - **Interactive Query Runner**: Menu-driven interface for testing and exploring queries
 - **OpenAI Integration**: GPT-3.5-turbo for intelligent query generation
 - **Logging System**: Comprehensive logging for debugging and monitoring
@@ -418,7 +438,7 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **Password Security**: URL encoding/decoding for special characters
 - **Connection Validation**: Automatic database connection testing
 - **Multiple Vector Stores**: ChromaDB, FAISS, and LangChain Chroma support
-- **Testing Suite**: Comprehensive unit and integration tests with pytest (18/18 tests passing)
+- **Testing Suite**: Comprehensive unit and integration tests with pytest (20/20 tests passing)
 
 ### 🚧 In Development
 - Advanced query result formatting
@@ -426,7 +446,7 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - Query history and caching
 - Advanced error recovery
 - Query optimization suggestions
-- Few-shot learning with example queries
+- Dynamic few-shot example selection with semantic similarity
 
 ### 📋 Planned Features
 - Real-time query suggestions
@@ -533,9 +553,12 @@ This project includes comprehensive development documentation:
 - Answer rephrasing functionality with prompt templates and RunnablePassthrough chains.
 - Natural language response generation from raw SQL results.
 - Interactive query runner with menu-driven interface for ad-hoc query testing.
-- Three demo modes: first query test, refined query with rephrasing, and interactive mode.
+- Few-shot learning with curated example queries (4 examples covering various SQL patterns).
+- FewShotChatMessagePromptTemplate integration for guided SQL generation.
+- Dynamic prompt building with example selectors (static and semantic similarity ready).
+- Four demo modes: first query test, refined query with rephrasing, few-shot learning, and interactive mode.
 - Comprehensive logging, error handling, and password URL-encoding support.
-- Full test coverage (18/18 unit tests passing).
+- Full test coverage (20/20 unit tests passing).
 
 > The project now follows semantic versioning from this baseline. Tag v0.0.1 when promoting the current code to production.
 

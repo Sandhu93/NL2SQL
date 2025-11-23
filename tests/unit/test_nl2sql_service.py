@@ -195,6 +195,29 @@ class TestNL2SQLService:
             question, expected_sql, expected_result
         )
 
+    def test_generate_sql_with_examples(self, nl2sql_service):
+        """Test SQL generation with few-shot prompt."""
+        question = "How many customers have an order count greater than 5?"
+        expected_sql = "SELECT COUNT(*) FROM customers WHERE orderCount > 5;"
+        
+        mock_prompt = MagicMock()
+        mock_chain = MagicMock()
+        mock_chain.invoke.return_value = expected_sql
+        chained_once = MagicMock()
+        chained_once.__or__.return_value = mock_chain
+        mock_prompt.__or__.return_value = chained_once
+        nl2sql_service.build_few_shot_prompt = MagicMock(return_value=mock_prompt)
+        
+        nl2sql_service.db.get_table_info = MagicMock(return_value="table info")
+        
+        with patch('app.services.nl2sql_service.StrOutputParser') as mock_parser:
+            mock_parser.return_value = MagicMock()
+            sql_query = nl2sql_service.generate_sql_with_examples(question)
+        
+        assert sql_query == expected_sql
+        mock_prompt.__or__.assert_called()
+        mock_chain.invoke.assert_called_once()
+
 
 class TestNL2SQLServiceErrorHandling:
     """Test error handling scenarios for NL2SQL service."""
@@ -298,7 +321,7 @@ class TestInteractiveQueryRunner:
         with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
              patch('app.services.nl2sql_service.logger') as mock_logger, \
              patch('builtins.print'), \
-             patch('builtins.input', side_effect=["3"]):
+             patch('builtins.input', side_effect=["4"]):
             
             interactive_query_runner(mock_sql_database)
         
@@ -324,4 +347,25 @@ class TestInteractiveQueryRunner:
             interactive_query_runner(mock_sql_database)
         
         mock_service.process_question_rephrased.assert_called_once_with(REFINED_TEST_QUESTION)
+        mock_logger.info.assert_called()
+
+    def test_interactive_few_shot_option(self, mock_sql_database):
+        """Ensure few-shot path is invoked via menu option 3."""
+        few_shot_result = {
+            "sql": "SELECT COUNT(*) FROM customers WHERE orderCount > 5",
+            "result": [{"count": 2}],
+            "answer": "There are 2 customers with an order count over 5."
+        }
+        with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
+             patch('app.services.nl2sql_service.logger') as mock_logger, \
+             patch('builtins.print'), \
+             patch('builtins.input', side_effect=["3", "question here", "exit"]):
+            
+            mock_service = MagicMock()
+            mock_service.process_question_few_shot.return_value = few_shot_result
+            mock_service_cls.return_value = mock_service
+            
+            interactive_query_runner(mock_sql_database)
+        
+        mock_service.process_question_few_shot.assert_called_once()
         mock_logger.info.assert_called()
