@@ -24,7 +24,9 @@ from main import (
     create_database_uri,
     initialize_database,
     display_database_info,
-    execute_first_query
+    execute_first_query,
+    execute_refined_query,
+    interactive_query_runner,
 )
 
 class TestEnvironmentVariables:
@@ -236,8 +238,18 @@ class TestIntegration:
     """Integration tests combining multiple components."""
     
     @patch('main.initialize_database')
+    @patch('main.execute_refined_query')
+    @patch('main.interactive_query_runner')
     @patch('main.execute_first_query')
-    def test_main_function_success(self, mock_test_query, mock_init_db, mock_env_vars, mock_sql_database):
+    def test_main_function_success(
+        self,
+        mock_first_query,
+        mock_interactive,
+        mock_refined_query,
+        mock_init_db,
+        mock_env_vars,
+        mock_sql_database
+    ):
         """Test main function successful execution."""
         from main import main
         
@@ -249,7 +261,9 @@ class TestIntegration:
         
         # Verify execution flow
         mock_init_db.assert_called_once()
-        mock_test_query.assert_called_once_with(mock_sql_database)
+        mock_first_query.assert_called_once_with(mock_sql_database)
+        mock_refined_query.assert_called_once_with(mock_sql_database)
+        mock_interactive.assert_called_once_with(mock_sql_database)
         assert result == mock_sql_database
     
     def test_main_function_missing_env_vars(self):

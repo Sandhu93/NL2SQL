@@ -280,6 +280,7 @@ The current `main.py` provides a complete NL2SQL pipeline with natural language 
 - **Query Execution**: Direct database query execution with results
 - **Answer Rephrasing**: Converts raw SQL results to user-friendly natural language
 - **RunnablePassthrough Chains**: Streamlined processing pipeline
+- **Interactive Query Runner**: Menu-driven interface for testing queries
 
 ```bash
 # Activate virtual environment and run
@@ -300,6 +301,11 @@ python main.py
   - Generated SQL query
   - Raw SQL results
   - Rephrased natural language answer
+- **Interactive Query Runner**: Menu-driven interface
+  - Option 1: Run first query demo with additional samples
+  - Option 2: Enter your own natural language questions
+  - Option 3: Exit interactive mode
+  - Real-time query processing with SQL generation, execution, and answer rephrasing
 
 ### Query Examples Working Now
 ```python
@@ -314,14 +320,22 @@ python main.py
   → SQL: "SELECT COUNT(*) FROM customers..."
   → Raw Result: "[(42,)]"
   → Rephrased: "There are 42 customers who have placed more than 5 orders."
+
+# Interactive Query Runner
+User interaction:
+  Select an option [1/2/3]: 2
+  Enter your question: How many products are in stock?
+  → Generated SQL Query: SELECT COUNT(*) FROM products WHERE quantityInStock > 0
+  → Raw Query Results: [(110,)]
+  → Rephrased Answer: There are 110 products currently in stock.
 ```
 
 ### Future Implementations (Coming Soon)
-- Interactive query interface
 - Advanced query result formatting
 - Query history and user sessions
-- Web API endpoints
+- Web API endpoints with FastAPI
 - Real-time query suggestions
+- Query validation and optimization hints
 
 ### Running Jupyter Notebook
 ```bash
@@ -397,21 +411,22 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **Answer Rephrasing**: Convert raw SQL results to natural language responses
 - **Prompt Templates**: User-friendly answer formatting with LangChain prompts
 - **RunnablePassthrough Chains**: Streamlined query-to-answer pipeline
+- **Interactive Query Runner**: Menu-driven interface for testing and exploring queries
 - **OpenAI Integration**: GPT-3.5-turbo for intelligent query generation
 - **Logging System**: Comprehensive logging for debugging and monitoring
 - **Error Handling**: Graceful error handling with specific error messages
 - **Password Security**: URL encoding/decoding for special characters
 - **Connection Validation**: Automatic database connection testing
 - **Multiple Vector Stores**: ChromaDB, FAISS, and LangChain Chroma support
-- **Testing Suite**: Comprehensive unit and integration tests with pytest (16/16 tests passing)
+- **Testing Suite**: Comprehensive unit and integration tests with pytest (18/18 tests passing)
 
 ### 🚧 In Development
-- Interactive query interface
 - Advanced query result formatting
-- FastAPI web interface  
+- FastAPI web interface with RESTful endpoints
 - Query history and caching
 - Advanced error recovery
 - Query optimization suggestions
+- Few-shot learning with example queries
 
 ### 📋 Planned Features
 - Real-time query suggestions
@@ -517,8 +532,10 @@ This project includes comprehensive development documentation:
 - First-query demo plus additional sample queries.
 - Answer rephrasing functionality with prompt templates and RunnablePassthrough chains.
 - Natural language response generation from raw SQL results.
+- Interactive query runner with menu-driven interface for ad-hoc query testing.
+- Three demo modes: first query test, refined query with rephrasing, and interactive mode.
 - Comprehensive logging, error handling, and password URL-encoding support.
-- Full test coverage (16/16 unit tests passing).
+- Full test coverage (18/18 unit tests passing).
 
 > The project now follows semantic versioning from this baseline. Tag v0.0.1 when promoting the current code to production.
 

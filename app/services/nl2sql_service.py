@@ -273,6 +273,69 @@ def execute_refined_query(db: SQLDatabase) -> None:
         print(f"Error during refined query test: {e}")
 
 
+def interactive_query_runner(db: SQLDatabase) -> None:
+    """
+    Provide an interactive menu to run demos or ad-hoc refined queries.
+    
+    Args:
+        db: SQLDatabase connection object
+    """
+    try:
+        logger.info("Starting interactive query runner")
+        nl2sql_service = NL2SQLService(db)
+        
+        print("\n" + "="*60)
+        print("INTERACTIVE NL2SQL TESTING")
+        print("="*60)
+        print("Options:")
+        print("  1) Run first query demo (includes additional samples)")
+        print("  2) Run refined query with your own question")
+        print("  3) Exit interactive mode")
+        print("-"*60)
+        print("Type the option number or 'exit'/'q' to quit.\n")
+        
+        while True:
+            choice = input("Select an option [1/2/3]: ").strip().lower()
+            
+            if choice in {"3", "exit", "q", "quit"}:
+                print("Exiting interactive mode.")
+                logger.info("Interactive mode exited by user")
+                break
+            
+            if choice == "1":
+                execute_first_query(db)
+                continue
+            
+            if choice == "2":
+                question = input(
+                    f"Enter your question (default: {REFINED_TEST_QUESTION}): "
+                ).strip()
+                if not question:
+                    question = REFINED_TEST_QUESTION
+                try:
+                    response = nl2sql_service.process_question_rephrased(question)
+                    
+                    print("\nGenerated SQL Query:")
+                    print(response["sql"])
+                    print("-"*60)
+                    print("Raw Query Results:")
+                    print(response["result"])
+                    print("-"*60)
+                    print("Rephrased Answer:")
+                    print(response["answer"])
+                    print("="*60 + "\n")
+                    
+                    logger.info("Interactive refined query executed successfully")
+                except Exception as exc:
+                    logger.error(f"Interactive refined query failed: {exc}")
+                    print(f"Error executing refined query: {exc}")
+                continue
+            
+            print("Invalid selection. Please choose 1, 2, or 3 (or 'exit').")
+    except Exception as exc:
+        logger.error(f"Interactive query runner encountered an error: {exc}")
+
+
 def _execute_additional_queries(nl2sql_service: NL2SQLService) -> None:
     """
     Execute additional test queries to demonstrate functionality.

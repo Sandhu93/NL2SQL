@@ -20,7 +20,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.utils.logging_config import setup_logging
 from app.utils.env_loader import load_environment_variables, setup_openai_api, setup_langsmith_tracing
 from app.db.database_manager import create_database_uri, initialize_database, display_database_info
-from app.services.nl2sql_service import execute_first_query, execute_refined_query
+from app.services.nl2sql_service import (
+    execute_first_query,
+    execute_refined_query,
+    interactive_query_runner,
+)
 
 # Setup logging
 logger = setup_logging()
@@ -60,6 +64,7 @@ def main():
         # Test first query functionality
         execute_first_query(db)
         execute_refined_query(db)
+        interactive_query_runner(db)
         
         logger.info("Ready for NL2SQL operations!")
         

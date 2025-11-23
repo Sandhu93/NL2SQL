@@ -828,6 +828,7 @@ You don't have to copy this exactly, but files MUST follow the same general prin
   - Call OpenAI/LLM clients.
   - Use DatabaseManager and vector stores.
 - Should stay framework-agnostic where possible (e.g., no FastAPI types here).
+- **Main entrypoints stay thin**: keep `main.py` limited to wiring/bootstrapping; put interactive helpers, demos, or business logic in services/utils instead of adding functions directly to `main.py`.
 
 **Database layer** (`app/db/`):
 - Contains all DB-specific code:

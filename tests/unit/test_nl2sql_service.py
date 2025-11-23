@@ -19,6 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.services.nl2sql_service import (
     NL2SQLService,
     execute_refined_query,
+    interactive_query_runner,
     REFINED_TEST_QUESTION,
 )
 
@@ -287,3 +288,40 @@ class TestExecuteRefinedQuery:
         )
         mock_logger.info.assert_called()
         mock_print.assert_called()
+
+
+class TestInteractiveQueryRunner:
+    """Test interactive menu handler."""
+    
+    def test_interactive_exit_immediately(self, mock_sql_database):
+        """Ensure interactive runner exits cleanly when user chooses exit."""
+        with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
+             patch('app.services.nl2sql_service.logger') as mock_logger, \
+             patch('builtins.print'), \
+             patch('builtins.input', side_effect=["3"]):
+            
+            interactive_query_runner(mock_sql_database)
+        
+        mock_service_cls.assert_called_once_with(mock_sql_database)
+        mock_logger.info.assert_called()
+
+    def test_interactive_uses_default_question_when_empty(self, mock_sql_database):
+        """Ensure blank input falls back to default refined test question."""
+        refined_result = {
+            "sql": "SELECT COUNT(*) FROM customers WHERE orderCount > 5",
+            "result": [{"count": 2}],
+            "answer": "There are 2 customers with an order count over 5."
+        }
+        with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
+             patch('app.services.nl2sql_service.logger') as mock_logger, \
+             patch('builtins.print'), \
+             patch('builtins.input', side_effect=["2", "", "exit"]):
+            
+            mock_service = MagicMock()
+            mock_service.process_question_rephrased.return_value = refined_result
+            mock_service_cls.return_value = mock_service
+            
+            interactive_query_runner(mock_sql_database)
+        
+        mock_service.process_question_rephrased.assert_called_once_with(REFINED_TEST_QUESTION)
+        mock_logger.info.assert_called()

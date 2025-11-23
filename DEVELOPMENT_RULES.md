@@ -26,6 +26,7 @@ python -c "import sys; print(sys.executable)"  # Should point to venv/Scripts/py
 3. **Docstrings**: All functions, classes, and modules must have descriptive docstrings
 4. **Error Handling**: Implement proper exception handling with specific exception types
 5. **Constants**: Use UPPER_CASE for constants and define them at module level
+6. **Keep entrypoints thin**: `main.py` should only wire/boot the app; move demos, interactive flows, and business logic into services/utils instead of adding functions directly to the entrypoint.
 
 ### Code Structure Rules
 ```python
