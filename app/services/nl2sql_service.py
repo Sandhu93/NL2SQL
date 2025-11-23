@@ -9,12 +9,15 @@ Python Version: 3.11
 """
 
 # Standard library imports
+import csv
 import logging
+import os
 from operator import itemgetter
 from typing import List, Optional
 
 # LangChain / OpenAI imports
 from langchain.chains import create_sql_query_chain
+from langchain.chains.openai_tools import create_extraction_chain_pydantic
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_core.example_selectors import SemanticSimilarityExampleSelector
@@ -24,6 +27,7 @@ from langchain_core.prompts import (
     FewShotChatMessagePromptTemplate,
     PromptTemplate,
 )
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
@@ -55,6 +59,12 @@ FEW_SHOT_EXAMPLES = [
         "query": "SELECT firstName, lastName FROM employees WHERE jobTitle LIKE '%Sales%';",
     },
 ]
+TABLE_METADATA_CSV = os.getenv("TABLE_METADATA_CSV", "classicmodels_tables_llm.csv")
+SYSTEM_TABLE_PROMPT = (
+    "Return the names of ALL the SQL tables that MIGHT be relevant to the user question. "
+    "Remember to include ALL POTENTIALLY RELEVANT tables, even if you're not sure they are needed.\n\n"
+    "Table reference:\n{table_details}"
+)
 ANSWER_PROMPT = PromptTemplate.from_template(
     """Given the following user question, corresponding SQL query, and SQL result, answer the user question.
 
@@ -94,6 +104,9 @@ class NL2SQLService:
         self.llm = ChatOpenAI(model=model_name, temperature=temperature)
         self.query_chain = create_sql_query_chain(self.llm, self.db)
         self.query_executor = QuerySQLDataBaseTool(db=self.db)
+        self.table_metadata = self._load_table_metadata(TABLE_METADATA_CSV)
+        if os.getenv("TABLE_METADATA_CSV"):
+            logger.info("Using TABLE_METADATA_CSV override from environment")
         self.rephrase_chain = (
             RunnablePassthrough.assign(query=self.query_chain).assign(
                 result=itemgetter("query") | self.query_executor
@@ -163,6 +176,120 @@ class NL2SQLService:
             ]
         )
         return prompt
+
+    @staticmethod
+    def _load_table_metadata(csv_path: str) -> List[dict]:
+        """
+        Load table metadata from a CSV file.
+        
+        Args:
+            csv_path: Path to the CSV containing table metadata.
+            
+        Returns:
+            List[dict]: List of table metadata dictionaries.
+        """
+        metadata: List[dict] = []
+        try:
+            with open(csv_path, mode="r", encoding="utf-8") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    metadata.append({
+                        "table": row.get("table", "").strip(),
+                        "description": row.get("description", "").strip(),
+                        "important_columns": (
+                            row.get("important_columns")
+                            or row.get("important_coulmns")
+                            or ""
+                        ).strip(),
+                    })
+            logger.info("Loaded table metadata for dynamic selection")
+        except FileNotFoundError:
+            logger.warning(f"Table metadata CSV not found at path: {csv_path}")
+        except Exception as exc:
+            logger.error(f"Failed to load table metadata: {exc}")
+        return metadata
+
+    def _table_details_text(self) -> str:
+        """
+        Create table details text block for prompts from loaded metadata.
+        
+        Returns:
+            str: Concatenated table details text.
+        """
+        if not self.table_metadata:
+            return ""
+        details: List[str] = []
+        for row in self.table_metadata:
+            table_name = row.get("table", "")
+            description = row.get("description", "")
+            important_cols = row.get("important_columns", "")
+            section = f"Table Name: {table_name}\nTable Description: {description}"
+            if important_cols:
+                section += f"\nImportant Columns: {important_cols}"
+            details.append(section)
+        return "\n\n".join(details)
+
+    def _select_relevant_tables(self, question: str, top_k: int = 3) -> List[str]:
+        """
+        Select relevant tables using LLM extraction over table metadata.
+        
+        Args:
+            question: User natural language question.
+            top_k: Number of tables to suggest.
+            
+        Returns:
+            List[str]: Selected table names.
+        """
+        if not self.table_metadata:
+            return list(self.db.get_usable_table_names())
+        
+        class Table(BaseModel):
+            """Table in SQL database."""
+            name: str = Field(description="Name of table in SQL database.")
+        
+        table_prompt = SYSTEM_TABLE_PROMPT.format(table_details=self._table_details_text())
+        try:
+            table_chain = create_extraction_chain_pydantic(
+                Table,
+                self.llm,
+                system_message=table_prompt,
+            )
+            tables = table_chain.invoke({"input": question})
+            table_names = [table.name for table in tables][:top_k]
+            return table_names or list(self.db.get_usable_table_names())
+        except Exception as exc:
+            logger.error(f"Failed to select relevant tables: {exc}")
+            return list(self.db.get_usable_table_names())
+
+    def _format_table_context(self, table_names: List[str]) -> str:
+        """
+        Build table context string limited to selected tables.
+        
+        Args:
+            table_names: List of table names to include.
+            
+        Returns:
+            str: Formatted table context for prompts.
+        """
+        if not table_names:
+            return self.db.get_table_info()
+        if not self.table_metadata:
+            return self.db.get_table_info()
+        
+        selected = [row for row in self.table_metadata if row.get("table") in table_names]
+        if not selected:
+            return self.db.get_table_info()
+        
+        details: List[str] = []
+        for row in selected:
+            table_name = row.get("table", "")
+            description = row.get("description", "")
+            important_cols = row.get("important_columns", "")
+            section = f"Table Name: {table_name}\nTable Description: {description}"
+            if important_cols:
+                section += f"\nImportant Columns: {important_cols}"
+            details.append(section)
+        return "\n\n".join(details)
     
     def generate_sql(self, question: str) -> str:
         """
@@ -255,7 +382,8 @@ class NL2SQLService:
         try:
             logger.info("Generating SQL with few-shot examples")
             chain = prompt | self.llm | StrOutputParser()
-            table_info = self.db.get_table_info()
+            table_names = self._select_relevant_tables(question, top_k=k)
+            table_info = self._format_table_context(table_names)
             generated_query = chain.invoke(
                 {"input": question, "table_info": table_info, "top_k": k}
             )

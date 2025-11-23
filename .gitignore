@@ -111,9 +111,9 @@ test_reports/
 *~
 
 # Large data files (optional - uncomment if needed)
-# data/
-# *.csv
-# *.xlsx
+data/
+*.csv
+*.xlsx
 
 # Notebook outputs (keep notebooks but ignore outputs)
 *.ipynb_checkpoints/

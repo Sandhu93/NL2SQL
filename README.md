@@ -42,11 +42,12 @@ This tutorial covers building production-ready NL2SQL systems from basics to adv
    - Using vector embeddings (ChromaDB/FAISS) for context matching
    - Tailoring examples to query context automatically
 
-5. **Dynamic Relevant Table Selection**
+5. **Dynamic Relevant Table Selection** ✅ Implemented
    - Optimizing for databases with 100+ tables
    - Reducing prompt token usage and costs
    - Improving performance with focused table selection
    - Using table descriptions for intelligent filtering
+   - LLM-based extraction with Pydantic models
 
 6. **Adding Memory for Conversational Context**
    - Implementing chat message history
@@ -207,6 +208,8 @@ NL2SQL_tutorial/
 - RunnablePassthrough chain integration
 - Few-shot learning with curated examples
 - Dynamic prompt building with example selectors
+- Dynamic table selection with metadata filtering
+- CSV-based table metadata loading
 
 **3. Utilities Layer (`app/utils/`)**
 - Environment variable loading & validation
@@ -239,6 +242,9 @@ DB_NAME=classicmodels
 # Optional: LangSmith Tracing
 LANGSMITH_API_KEY=your_langsmith_api_key_here
 LANGSMITH_TRACING=true
+
+# Optional: Table Metadata CSV Path
+TABLE_METADATA_CSV=classicmodels_tables_llm.csv
 ```
 
 ### Special Characters in Passwords
@@ -284,6 +290,7 @@ The current `main.py` provides a complete NL2SQL pipeline with natural language 
 - **Answer Rephrasing**: Converts raw SQL results to user-friendly natural language
 - **RunnablePassthrough Chains**: Streamlined processing pipeline
 - **Few-Shot Learning**: Curated example queries guide SQL generation
+- **Dynamic Table Selection**: Intelligent table filtering based on query context
 - **Interactive Query Runner**: Menu-driven interface for testing queries
 
 ```bash
@@ -431,6 +438,9 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **RunnablePassthrough Chains**: Streamlined query-to-answer pipeline
 - **Few-Shot Learning**: Curated example queries improve SQL generation accuracy
 - **FewShotChatMessagePromptTemplate**: LangChain few-shot prompt integration
+- **Dynamic Table Selection**: LLM-powered table filtering from CSV metadata
+- **Table Metadata Loading**: CSV-based table descriptions and column information
+- **Pydantic Model Extraction**: Structured table selection with create_extraction_chain_pydantic
 - **Interactive Query Runner**: Menu-driven interface for testing and exploring queries
 - **OpenAI Integration**: GPT-3.5-turbo for intelligent query generation
 - **Logging System**: Comprehensive logging for debugging and monitoring
@@ -446,7 +456,6 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - Query history and caching
 - Advanced error recovery
 - Query optimization suggestions
-- Dynamic few-shot example selection with semantic similarity
 
 ### 📋 Planned Features
 - Real-time query suggestions
@@ -556,6 +565,10 @@ This project includes comprehensive development documentation:
 - Few-shot learning with curated example queries (4 examples covering various SQL patterns).
 - FewShotChatMessagePromptTemplate integration for guided SQL generation.
 - Dynamic prompt building with example selectors (static and semantic similarity ready).
+- Dynamic table selection using LLM extraction from CSV metadata.
+- Table metadata loading from `classicmodels_tables_llm.csv` with descriptions and important columns.
+- Intelligent table filtering with Pydantic models (create_extraction_chain_pydantic).
+- Reduced token usage by limiting context to relevant tables only.
 - Four demo modes: first query test, refined query with rephrasing, few-shot learning, and interactive mode.
 - Comprehensive logging, error handling, and password URL-encoding support.
 - Full test coverage (20/20 unit tests passing).

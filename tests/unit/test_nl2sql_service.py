@@ -208,7 +208,8 @@ class TestNL2SQLService:
         mock_prompt.__or__.return_value = chained_once
         nl2sql_service.build_few_shot_prompt = MagicMock(return_value=mock_prompt)
         
-        nl2sql_service.db.get_table_info = MagicMock(return_value="table info")
+        nl2sql_service._select_relevant_tables = MagicMock(return_value=["customers"])
+        nl2sql_service._format_table_context = MagicMock(return_value="table info")
         
         with patch('app.services.nl2sql_service.StrOutputParser') as mock_parser:
             mock_parser.return_value = MagicMock()
@@ -217,6 +218,8 @@ class TestNL2SQLService:
         assert sql_query == expected_sql
         mock_prompt.__or__.assert_called()
         mock_chain.invoke.assert_called_once()
+        nl2sql_service._select_relevant_tables.assert_called_once_with(question, top_k=2)
+        nl2sql_service._format_table_context.assert_called_once_with(["customers"])
 
 
 class TestNL2SQLServiceErrorHandling:
