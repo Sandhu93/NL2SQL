@@ -2,7 +2,7 @@
 Module: database_manager.py
 Description: Database connection management and utilities
 Dependencies: langchain-community, pymysql, sqlalchemy
-Author: AI Agent
+Author: Sandeep B Kadam
 Created: 2025-11-22
 Last Modified: 2025-11-22
 Python Version: 3.11

@@ -2,7 +2,7 @@
 Module: logging_config.py
 Description: Logging configuration and setup utilities
 Dependencies: Standard library logging
-Author: AI Agent
+Author: Sandeep B Kadam
 Created: 2025-11-22
 Last Modified: 2025-11-22
 Python Version: 3.11

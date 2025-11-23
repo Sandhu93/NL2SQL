@@ -16,7 +16,11 @@ import sys
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.services.nl2sql_service import NL2SQLService
+from app.services.nl2sql_service import (
+    NL2SQLService,
+    execute_refined_query,
+    REFINED_TEST_QUESTION,
+)
 
 
 class TestNL2SQLService:
@@ -146,6 +150,50 @@ class TestNL2SQLService:
         
         assert "Database connection error" in str(exc_info.value)
 
+    def test_rephrase_answer_success(self, nl2sql_service):
+        """Test rephrasing pipeline returns a natural language answer."""
+        expected_answer = "There are 2 customers with an order count over 5."
+        mock_pipeline = MagicMock()
+        mock_pipeline.__or__.return_value = mock_pipeline
+        mock_pipeline.invoke.return_value = expected_answer
+        
+        mock_prompt = MagicMock()
+        mock_prompt.__or__.return_value = mock_pipeline
+        
+        with patch('app.services.nl2sql_service.ANSWER_PROMPT', mock_prompt), \
+             patch('app.services.nl2sql_service.StrOutputParser') as mock_parser:
+            mock_parser.return_value = MagicMock()
+            answer = nl2sql_service.rephrase_answer(
+                question="How many customers have an order count greater than 5?",
+                sql_query="SELECT COUNT(*) FROM customers WHERE orderCount > 5",
+                result=[{"count": 2}]
+            )
+        
+        assert answer == expected_answer
+        mock_pipeline.invoke.assert_called_once()
+
+    def test_process_question_rephrased(self, nl2sql_service):
+        """Test end-to-end refined flow returns sql, raw result, and answer."""
+        question = "List all offices in the USA"
+        expected_sql = "SELECT * FROM offices WHERE country = 'USA'"
+        expected_result = [{"officeCode": "1", "city": "NYC"}]
+        expected_answer = "There is 1 office in the USA: NYC."
+        
+        nl2sql_service.generate_sql = MagicMock(return_value=expected_sql)
+        nl2sql_service.execute_query = MagicMock(return_value=expected_result)
+        nl2sql_service.rephrase_answer = MagicMock(return_value=expected_answer)
+        
+        response = nl2sql_service.process_question_rephrased(question)
+        
+        assert response["sql"] == expected_sql
+        assert response["result"] == expected_result
+        assert response["answer"] == expected_answer
+        nl2sql_service.generate_sql.assert_called_once_with(question)
+        nl2sql_service.execute_query.assert_called_once_with(expected_sql)
+        nl2sql_service.rephrase_answer.assert_called_once_with(
+            question, expected_sql, expected_result
+        )
+
 
 class TestNL2SQLServiceErrorHandling:
     """Test error handling scenarios for NL2SQL service."""
@@ -206,3 +254,36 @@ class TestNL2SQLServiceErrorHandling:
         # Act & Assert
         with pytest.raises(Exception):
             service.process_question(question)
+
+
+class TestExecuteRefinedQuery:
+    """Test refined query demonstration helper."""
+    
+    def test_execute_refined_query_calls_service_methods(self, mock_sql_database):
+        """Ensure refined demo delegates to service methods."""
+        refined_result = {
+            "sql": "SELECT COUNT(*) FROM customers WHERE orderCount > 5",
+            "result": [{"count": 2}],
+            "answer": "There are 2 customers with an order count over 5."
+        }
+        with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
+             patch('app.services.nl2sql_service.logger') as mock_logger, \
+             patch('builtins.print') as mock_print:
+            
+            mock_service = MagicMock()
+            mock_service.process_question_rephrased.return_value = refined_result
+            mock_service.rephrase_answer.return_value = refined_result["answer"]
+            mock_service_cls.return_value = mock_service
+            
+            execute_refined_query(mock_sql_database)
+        
+        mock_service.process_question_rephrased.assert_called_once_with(
+            REFINED_TEST_QUESTION
+        )
+        mock_service.rephrase_answer.assert_called_once_with(
+            REFINED_TEST_QUESTION,
+            refined_result["sql"],
+            refined_result["result"]
+        )
+        mock_logger.info.assert_called()
+        mock_print.assert_called()

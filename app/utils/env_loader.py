@@ -2,7 +2,7 @@
 Module: env_loader.py
 Description: Environment variable loading and validation utilities
 Dependencies: python-dotenv
-Author: AI Agent
+Author: Sandeep B Kadam
 Created: 2025-11-22
 Last Modified: 2025-11-22
 Python Version: 3.11

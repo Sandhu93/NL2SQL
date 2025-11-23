@@ -2,7 +2,7 @@
 Module: main.py
 Description: NL2SQL Tutorial Main Application Entry Point
 Dependencies: See requirements.txt
-Author: Sandeep B Kadam (refactored by AI Agent)
+Author: Sandeep B Kadam
 Created: 2025-11-21
 Last Modified: 2025-11-22
 Python Version: 3.11
@@ -20,7 +20,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.utils.logging_config import setup_logging
 from app.utils.env_loader import load_environment_variables, setup_openai_api, setup_langsmith_tracing
 from app.db.database_manager import create_database_uri, initialize_database, display_database_info
-from app.services.nl2sql_service import execute_first_query
+from app.services.nl2sql_service import execute_first_query, execute_refined_query
 
 # Setup logging
 logger = setup_logging()
@@ -59,6 +59,7 @@ def main():
         
         # Test first query functionality
         execute_first_query(db)
+        execute_refined_query(db)
         
         logger.info("Ready for NL2SQL operations!")
         

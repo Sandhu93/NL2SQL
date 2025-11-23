@@ -2,7 +2,7 @@
 Module: nl2sql_service.py
 Description: Natural Language to SQL conversion service
 Dependencies: langchain, langchain-openai, langchain-community
-Author: AI Agent
+Author: Sandeep B Kadam
 Created: 2025-11-22
 Last Modified: 2025-11-22
 Python Version: 3.11
@@ -10,12 +10,16 @@ Python Version: 3.11
 
 # Standard library imports
 import logging
+from operator import itemgetter
 from typing import List, Optional
 
 # LangChain / OpenAI imports
 from langchain.chains import create_sql_query_chain
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.utilities.sql_database import SQLDatabase
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 
 # Constants
@@ -26,6 +30,15 @@ TEST_QUERIES = [
     "How many customers are there?",
     "List all offices in the USA"
 ]
+REFINED_TEST_QUESTION = "How many customers have an order count greater than 5?"
+ANSWER_PROMPT = PromptTemplate.from_template(
+    """Given the following user question, corresponding SQL query, and SQL result, answer the user question.
+
+Question: {question}
+SQL Query: {query}
+SQL Result: {result}
+Answer:"""
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +70,14 @@ class NL2SQLService:
         self.llm = ChatOpenAI(model=model_name, temperature=temperature)
         self.query_chain = create_sql_query_chain(self.llm, self.db)
         self.query_executor = QuerySQLDataBaseTool(db=self.db)
+        self.rephrase_chain = (
+            RunnablePassthrough.assign(query=self.query_chain).assign(
+                result=itemgetter("query") | self.query_executor
+            )
+            | ANSWER_PROMPT
+            | self.llm
+            | StrOutputParser()
+        )
         
         logger.info(f"NL2SQL service initialized with model: {model_name}")
     
@@ -124,6 +145,44 @@ class NL2SQLService:
         result = self.execute_query(sql_query)
         return sql_query, result
 
+    def rephrase_answer(self, question: str, sql_query: str, result: str) -> str:
+        """
+        Convert raw SQL results into a concise natural language answer.
+        
+        Args:
+            question: Original user question
+            sql_query: Generated SQL query
+            result: Raw SQL execution result
+            
+        Returns:
+            str: Rephrased, user-friendly answer
+        """
+        try:
+            logger.info("Rephrasing SQL result for user-friendly answer")
+            response = (ANSWER_PROMPT | self.llm | StrOutputParser()).invoke(
+                {"question": question, "query": sql_query, "result": result}
+            )
+            logger.info("Rephrasing completed successfully")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to rephrase answer: {e}")
+            raise
+
+    def process_question_rephrased(self, question: str) -> dict:
+        """
+        Generate SQL, execute it, and return SQL, raw result, and rephrased answer.
+        
+        Args:
+            question: Natural language question
+            
+        Returns:
+            dict: Dictionary containing 'sql', 'result', and 'answer'
+        """
+        sql_query = self.generate_sql(question)
+        result = self.execute_query(sql_query)
+        answer = self.rephrase_answer(question, sql_query, result)
+        return {"sql": sql_query, "result": result, "answer": answer}
+
 
 def execute_first_query(db: SQLDatabase) -> None:
     """
@@ -166,6 +225,52 @@ def execute_first_query(db: SQLDatabase) -> None:
     except Exception as e:
         logger.error(f"First query test failed: {e}")
         print(f"Error during first query test: {e}")
+
+
+def execute_refined_query(db: SQLDatabase) -> None:
+    """
+    Demonstrate refined NL2SQL flow with rephrased answer output.
+    
+    Args:
+        db: SQLDatabase connection object
+    """
+    try:
+        logger.info("Starting refined query demonstration")
+        
+        nl2sql_service = NL2SQLService(db)
+        test_question = REFINED_TEST_QUESTION
+        
+        print("\n" + "="*60)
+        print("REFINED QUERY TEST - NL2SQL WITH REPHRASED ANSWER")
+        print("="*60)
+        print(f"Question: {test_question}")
+        print("-"*60)
+        
+        response = nl2sql_service.process_question_rephrased(test_question)
+        
+        print("Generated SQL Query:")
+        print(response["sql"])
+        print("-"*60)
+        print("Raw Query Results:")
+        print(response["result"])
+        print("-"*60)
+        print("Rephrased Answer:")
+        print(response["answer"])
+        
+        direct_answer = nl2sql_service.rephrase_answer(
+            test_question,
+            response["sql"],
+            response["result"]
+        )
+        print("-"*60)
+        print("Direct Rephrase Call (tutorial-style):")
+        print(direct_answer)
+        print("="*60)
+        
+        logger.info("Refined query demonstration completed successfully")
+    except Exception as e:
+        logger.error(f"Refined query demonstration failed: {e}")
+        print(f"Error during refined query test: {e}")
 
 
 def _execute_additional_queries(nl2sql_service: NL2SQLService) -> None:
