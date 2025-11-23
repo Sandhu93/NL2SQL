@@ -25,10 +25,11 @@ This tutorial covers building production-ready NL2SQL systems from basics to adv
    - Creating your first natural language query
    - Executing SQL and viewing results
 
-2. **Rephrasing Answers for Enhanced Clarity**
+2. **Rephrasing Answers for Enhanced Clarity** ✅ Implemented
    - Converting raw SQL results to natural language responses
    - Using prompt templates for user-friendly output
    - Implementing answer rephrasing with LangChain chains
+   - Integrated RunnablePassthrough for streamlined processing
 
 3. **Enhancing Models with Few-Shot Learning**
    - Incorporating example queries for better accuracy
@@ -201,6 +202,8 @@ NL2SQL_tutorial/
 - Query chain creation
 - Query execution
 - Result processing
+- Answer rephrasing with prompt templates
+- RunnablePassthrough chain integration
 
 **3. Utilities Layer (`app/utils/`)**
 - Environment variable loading & validation
@@ -251,7 +254,7 @@ The application automatically validates all required environment variables on st
 
 ### Running the Application
 
-The main entry point is `main.py`, which provides a complete NL2SQL pipeline demonstration:
+The main entry point is `main.py`, which provides a complete NL2SQL pipeline demonstration with answer rephrasing:
 
 ```bash
 # Activate virtual environment
@@ -261,8 +264,8 @@ venv\Scripts\activate
 python main.py
 ```
 
-### Current Implementation: NL2SQL Query System
-The current `main.py` provides a complete NL2SQL pipeline:
+### Current Implementation: NL2SQL Query System with Answer Rephrasing
+The current `main.py` provides a complete NL2SQL pipeline with natural language answer generation:
 
 #### Database Setup
 - Complete database connection setup
@@ -275,6 +278,8 @@ The current `main.py` provides a complete NL2SQL pipeline:
 - **Query Chain Creation**: Uses LangChain's `create_sql_query_chain`
 - **Automatic SQL Generation**: Intelligent query construction
 - **Query Execution**: Direct database query execution with results
+- **Answer Rephrasing**: Converts raw SQL results to user-friendly natural language
+- **RunnablePassthrough Chains**: Streamlined processing pipeline
 
 ```bash
 # Activate virtual environment and run
@@ -291,6 +296,10 @@ python main.py
   - "Show me all products priced above $100" → Returns high-value products
   - "How many customers are there?" → Returns total customer count (122)
   - "List all offices in the USA" → Returns all US office locations
+- **Refined Query Test**: "How many customers have an order count greater than 5?"
+  - Generated SQL query
+  - Raw SQL results
+  - Rephrased natural language answer
 
 ### Query Examples Working Now
 ```python
@@ -299,6 +308,12 @@ python main.py
 "Show me all products priced above $100" → "SELECT * FROM products WHERE..." → Product list
 "How many customers are there?" → "SELECT COUNT(*) FROM customers" → 122
 "List all offices in the USA" → "SELECT * FROM offices WHERE country='USA'" → Office list
+
+# With Answer Rephrasing
+"How many customers have an order count greater than 5?"
+  → SQL: "SELECT COUNT(*) FROM customers..."
+  → Raw Result: "[(42,)]"
+  → Rephrased: "There are 42 customers who have placed more than 5 orders."
 ```
 
 ### Future Implementations (Coming Soon)
@@ -379,13 +394,16 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **Schema Exploration**: Complete database schema analysis and display
 - **Natural Language to SQL**: Convert natural language questions to SQL queries
 - **Query Execution**: Execute generated SQL queries and return results
+- **Answer Rephrasing**: Convert raw SQL results to natural language responses
+- **Prompt Templates**: User-friendly answer formatting with LangChain prompts
+- **RunnablePassthrough Chains**: Streamlined query-to-answer pipeline
 - **OpenAI Integration**: GPT-3.5-turbo for intelligent query generation
 - **Logging System**: Comprehensive logging for debugging and monitoring
 - **Error Handling**: Graceful error handling with specific error messages
 - **Password Security**: URL encoding/decoding for special characters
 - **Connection Validation**: Automatic database connection testing
 - **Multiple Vector Stores**: ChromaDB, FAISS, and LangChain Chroma support
-- **Testing Suite**: Comprehensive unit and integration tests with pytest
+- **Testing Suite**: Comprehensive unit and integration tests with pytest (16/16 tests passing)
 
 ### 🚧 In Development
 - Interactive query interface
@@ -497,7 +515,10 @@ This project includes comprehensive development documentation:
 - Baseline NL2SQL pipeline: environment validation, MySQL connectivity, schema display.
 - GPT-3.5-turbo integration with LangChain query chain and execution.
 - First-query demo plus additional sample queries.
+- Answer rephrasing functionality with prompt templates and RunnablePassthrough chains.
+- Natural language response generation from raw SQL results.
 - Comprehensive logging, error handling, and password URL-encoding support.
+- Full test coverage (16/16 unit tests passing).
 
 > The project now follows semantic versioning from this baseline. Tag v0.0.1 when promoting the current code to production.
 
