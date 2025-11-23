@@ -50,11 +50,20 @@ This tutorial covers building production-ready NL2SQL systems from basics to adv
    - Using table descriptions for intelligent filtering
    - LLM-based extraction with Pydantic models
 
-6. **Adding Memory for Conversational Context**
+6. **Adding Memory for Conversational Context** ✅ Implemented
    - Implementing chat message history
    - Handling follow-up questions intelligently
    - Maintaining conversational context across queries
    - Building interactive chatbot experiences
+   - Session-scoped ChatMessageHistory for conversations
+
+## Recent Enhancements (post last commit)
+
+- Few-shot SQL generation now uses semantic similarity selection (FAISS + OpenAI embeddings) by default for better context matching.
+- Dynamic relevant table selection driven by `TABLE_METADATA_CSV` (default `classicmodels_tables_llm.csv`, override via `.env`) to keep prompts lean.
+- Interactive runner expanded: options for refined queries, few-shot guidance, and few-shot with conversational memory (session-scoped `ChatMessageHistory`), plus clean exit.
+- Result summarization for LLM prompting: large result sets are previewed with explicit shown/total counts; the full raw results remain available for display/export.
+- Answer prompt hardened: handles scalar/aggregate results directly, renders preview rows as compact markdown tables, and avoids hallucinating unseen rows or global extrema when only a preview is available.
 
 ### Tutorial Author
 
@@ -444,8 +453,11 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **SemanticSimilarityExampleSelector**: Intelligent context-aware example selection with OpenAI embeddings
 - **Dynamic Table Selection**: LLM-powered table filtering from CSV metadata
 - **Table Metadata Loading**: CSV-based table descriptions and column information
-- **Pydantic Model Extraction**: Structured table selection with create_extraction_chain_pydantic
-- **Interactive Query Runner**: Menu-driven interface for testing and exploring queries
+- **Pydantic Model Extraction**: Structured table selection with structured output
+- **Result Summarization**: Smart truncation of large result sets for efficient LLM processing
+- **Intelligent Answer Prompts**: Context-aware prompts that handle scalars, aggregates, and preview data correctly
+- **Conversational Memory**: ChatMessageHistory integration for multi-turn conversations with context
+- **Interactive Query Runner**: Enhanced menu-driven interface (5 options) for testing and exploring queries
 - **OpenAI Integration**: GPT-3.5-turbo for intelligent query generation
 - **Logging System**: Comprehensive logging for debugging and monitoring
 - **Error Handling**: Graceful error handling with specific error messages
@@ -565,7 +577,7 @@ This project includes comprehensive development documentation:
 - First-query demo plus additional sample queries.
 - Answer rephrasing functionality with prompt templates and RunnablePassthrough chains.
 - Natural language response generation from raw SQL results.
-- Interactive query runner with menu-driven interface for ad-hoc query testing.
+- Interactive query runner with enhanced menu-driven interface (5 options) for ad-hoc query testing.
 - Few-shot learning with curated example queries (4 examples covering various SQL patterns).
 - FewShotChatMessagePromptTemplate integration for guided SQL generation.
 - Dynamic prompt building with example selectors (static and semantic similarity ready).
@@ -574,11 +586,15 @@ This project includes comprehensive development documentation:
 - Automatic context-aware example retrieval based on query similarity.
 - Dynamic table selection using LLM extraction from CSV metadata.
 - Table metadata loading from `classicmodels_tables_llm.csv` with descriptions and important columns.
-- Intelligent table filtering with Pydantic models (create_extraction_chain_pydantic).
+- Intelligent table filtering with Pydantic models (structured output).
 - Reduced token usage by limiting context to relevant tables only.
-- Four demo modes: first query test, refined query with rephrasing, few-shot learning, and interactive mode.
+- **Result Summarization**: Intelligent truncation of large result sets (>10 rows) with preview + total count metadata.
+- **Improved Answer Prompts**: Context-aware prompts that correctly handle scalars, aggregates, previews, and multi-row results.
+- **Conversational Memory**: ChatMessageHistory integration for multi-turn conversations with follow-up question support.
+- **Enhanced Interactive Mode**: Option 4 enables conversational sessions with memory across multiple queries.
+- Five demo modes: first query test, refined query with rephrasing, few-shot learning, few-shot with memory, and exit.
 - Comprehensive logging, error handling, and password URL-encoding support.
-- Full test coverage (20/20 unit tests passing).
+- Full test coverage (21/21 unit tests passing including memory option).
 
 > The project now follows semantic versioning from this baseline. Tag v0.0.1 when promoting the current code to production.
 

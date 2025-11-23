@@ -17,7 +17,7 @@ from typing import List, Optional
 
 # LangChain / OpenAI imports
 from langchain.chains import create_sql_query_chain
-from langchain.chains.openai_tools import create_extraction_chain_pydantic
+from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_community.vectorstores import FAISS
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.utilities.sql_database import SQLDatabase
@@ -26,9 +26,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import (
     ChatPromptTemplate,
     FewShotChatMessagePromptTemplate,
+    MessagesPlaceholder,
     PromptTemplate,
 )
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
@@ -61,17 +62,66 @@ FEW_SHOT_EXAMPLES = [
     },
 ]
 TABLE_METADATA_CSV = os.getenv("TABLE_METADATA_CSV", "classicmodels_tables_llm.csv")
+MAX_RESULT_ROWS = 10  # Maximum rows to show in rephrased answers
+MAX_RESULT_LENGTH = 2000  # Maximum character length for result string
 SYSTEM_TABLE_PROMPT = (
     "Return the names of ALL the SQL tables that MIGHT be relevant to the user question. "
     "Remember to include ALL POTENTIALLY RELEVANT tables, even if you're not sure they are needed.\n\n"
     "Table reference:\n{table_details}"
 )
 ANSWER_PROMPT = PromptTemplate.from_template(
-    """Given the following user question, corresponding SQL query, and SQL result, answer the user question.
+    """You are a careful, precise data analyst helping a user understand SQL query results.
+
+You are given:
+- The user's natural language question.
+- The SQL query that was executed.
+- A SQL result OR a PREVIEW of that result.
+
+WHEN THE RESULT IS A SINGLE VALUE:
+- Sometimes the SQL Result is effectively a single scalar value, such as:
+  - "[(2,)]"
+  - "[(42,)]"
+  - "2"
+  - or a 1-row, 1-column table.
+- In those cases, interpret that value directly and answer in natural language, e.g.:
+  - "There are 2 customers who have more than 5 orders."
+- DO NOT invent any IDs, names, or extra fields that are not present in the result.
+- If the query is an aggregate (COUNT, SUM, AVG, MIN, MAX, etc.), only answer what that aggregate tells you.
+
+IMPORTANT ABOUT PREVIEWS:
+- Sometimes the SQL Result is a PREVIEW only (for example: "SQL query returned N rows in total. Preview of the first K rows only: [...]").
+- In those cases, DO NOT assume you can see every row.
+- Use the preview plus the total row count to summarize the answer.
+- Make it clear in your answer if you are only showing or describing the first K rows out of N.
+- DO NOT fabricate or hallucinate rows that are not visible in the preview.
+
+STRICT RULES ABOUT GLOBAL STATEMENTS:
+- You must NEVER claim that a value is the global minimum, maximum, "highest", or "lowest" for the FULL result set UNLESS:
+  - The query itself is a global aggregate (e.g. SELECT MAX(...), MIN(...), COUNT(*), SUM(...)), OR
+  - The result clearly includes ALL rows (not a preview).
+- If you only see a preview and you talk about extremes, you MUST say things like:
+  - "in this preview" or "among the shown rows".
+- Do NOT claim "in the whole dataset" or "overall" when you only have a preview.
+
+FORMATTING RULES FOR MULTIPLE ROWS:
+- If the result or preview clearly shows multiple rows (for example, a Python-style list of tuples),
+  then:
+  1. Infer reasonable column names from the question and/or query (for example, 'customerNumber', 'customerName', 'totalOrders').
+  2. Render ONLY the visible rows as a compact Markdown table.
+  3. After the table, add a short natural language summary that includes:
+     - The total number of rows returned (N), if this information is present in the result/preview text.
+     - How many rows you actually showed (K = number of rows in the table).
+     - Any obvious highlights visible in the preview (for example, which shown row has the highest value IN THE PREVIEW).
+- When the preview text includes phrases like "SQL query returned 122 rows in total" and "Preview of the first 10 rows", use those concrete numbers (122 and 10) in your answer. Do NOT write placeholders like "N" or "K" in the final answer.
+- Do NOT just restate the preview text verbatim.
+- Avoid generic sentences like "this pattern continues"; be specific about what you can see in the preview.
 
 Question: {question}
 SQL Query: {query}
-SQL Result: {result}
+SQL Result (or preview): {result}
+
+Provide a clear, concise answer for the user based on the information available.
+If there are many rows, give an overview and mention how many rows exist in total, and how many you are actually showing.
 Answer:"""
 )
 
@@ -124,6 +174,7 @@ class NL2SQLService:
         examples: Optional[List[dict]] = None,
         use_dynamic_selector: bool = True,
         k: int = 2,
+        include_messages: bool = False,
     ) -> ChatPromptTemplate:
         """
         Build a ChatPromptTemplate with few-shot examples for SQL generation.
@@ -132,6 +183,7 @@ class NL2SQLService:
             examples: Optional list of example dicts with 'input' and 'query'.
             use_dynamic_selector: Whether to use semantic similarity selection (vectorstore-backed).
             k: Number of examples to select when using dynamic selector.
+            include_messages: Whether to include prior chat history (for memory).
         
         Returns:
             ChatPromptTemplate: Prompt configured with few-shot examples.
@@ -167,9 +219,12 @@ class NL2SQLService:
                     "Table context:\n{table_info}\n\nUse up to {top_k} relevant tables.",
                 ),
                 few_shot,
+                MessagesPlaceholder(variable_name="messages") if include_messages else None,
                 ("human", "{input}"),
             ]
         )
+        # Remove any None entries (when messages placeholder not requested)
+        prompt = ChatPromptTemplate.from_messages([m for m in prompt.messages if m])
         return prompt
 
     @staticmethod
@@ -215,13 +270,13 @@ class NL2SQLService:
         Returns:
             SemanticSimilarityExampleSelector: Selector configured with vectorstore.
         """
-        texts = [
-            f"Question: {item['input']}\nSQL: {item['query']}" for item in examples
-        ]
         embeddings = OpenAIEmbeddings()
-        vectorstore = FAISS.from_texts(texts, embeddings, metadatas=examples)
-        selector = SemanticSimilarityExampleSelector.from_vectorstore(
-            vectorstore, k=k
+        selector = SemanticSimilarityExampleSelector.from_examples(
+            examples,
+            embeddings,
+            FAISS,
+            k=k,
+            input_keys=["input"],
         )
         return selector
 
@@ -263,15 +318,24 @@ class NL2SQLService:
             """Table in SQL database."""
             name: str = Field(description="Name of table in SQL database.")
         
-        table_prompt = SYSTEM_TABLE_PROMPT.format(table_details=self._table_details_text())
+        table_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    SYSTEM_TABLE_PROMPT.format(
+                        table_details=self._table_details_text()
+                    ),
+                ),
+                ("human", "{input}"),
+            ]
+        )
         try:
-            table_chain = create_extraction_chain_pydantic(
-                Table,
-                self.llm,
-                system_message=table_prompt,
-            )
+            structured_llm = self.llm.with_structured_output(Table)
+            table_chain = table_prompt | structured_llm
             tables = table_chain.invoke({"input": question})
-            table_names = [table.name for table in tables][:top_k]
+            # ensure list handling for consistent downstream behavior
+            table_objs = tables if isinstance(tables, list) else [tables]
+            table_names = [table.name for table in table_objs][:top_k]
             return table_names or list(self.db.get_usable_table_names())
         except Exception as exc:
             logger.error(f"Failed to select relevant tables: {exc}")
@@ -306,6 +370,104 @@ class NL2SQLService:
                 section += f"\nImportant Columns: {important_cols}"
             details.append(section)
         return "\n\n".join(details)
+
+    @staticmethod
+    def _summarize_result(
+        result: object,
+        max_rows: int = MAX_RESULT_ROWS,
+        max_length: int = MAX_RESULT_LENGTH,
+    ) -> str:
+        """
+        Summarize potentially large query results for LLM prompting.
+        
+        - Small results are returned as-is (stringified).
+        - Larger results include only a preview plus metadata so the LLM
+          knows it is not seeing all rows.
+        
+        Args:
+            result: Raw query result (string, list, tuple, etc.)
+            max_rows: Maximum rows to include in the preview
+            max_length: Maximum characters to include in the preview string
+        
+        Returns:
+            str: Summary string suitable for prompt injection
+        """
+        import ast
+        
+        try:
+            if isinstance(result, str):
+                try:
+                    parsed = ast.literal_eval(result)
+                    if isinstance(parsed, (list, tuple)):
+                        result = parsed
+                except Exception:
+                    return result if len(result) <= max_length else result[:max_length] + " ... (truncated)"
+            
+            if isinstance(result, (list, tuple)):
+                total_count = len(result)
+                if total_count == 0:
+                    return "SQL query returned 0 rows."
+                if total_count <= max_rows:
+                    full_str = str(result)
+                    if len(full_str) > max_length:
+                        full_str = full_str[:max_length] + " ... (truncated)"
+                    return f"SQL query returned {total_count} rows:\n{full_str}"
+                
+                preview = result[:max_rows]
+                preview_str = str(preview)
+                if len(preview_str) > max_length:
+                    preview_str = preview_str[:max_length] + " ... (preview truncated)"
+                
+                summary = (
+                    f"SQL query returned {total_count} rows in total.\n"
+                    f"Preview of the first {max_rows} rows only:\n"
+                    f"{preview_str}\n"
+                    f"(Note: Only a preview is shown here to save tokens. "
+                    f"Shown rows: {len(preview)} of {total_count}.)"
+                )
+                return summary
+            
+            result_str = str(result)
+            if len(result_str) > max_length:
+                result_str = result_str[:max_length] + " ... (truncated)"
+            return result_str
+        
+        except Exception:
+            result_str = str(result)
+            if len(result_str) > max_length:
+                result_str = result_str[:max_length] + " ... (truncated)"
+            return result_str
+
+    @staticmethod
+    def _format_display_result(result: object, max_rows: int = 20) -> str:
+        """
+        Format results for console display with truncation metadata.
+        
+        Args:
+            result: Raw query result (string or sequence)
+            max_rows: Maximum rows to display before truncating
+        
+        Returns:
+            str: Human-friendly display string
+        """
+        try:
+            if isinstance(result, str):
+                return result
+            if isinstance(result, (list, tuple)):
+                if len(result) <= max_rows:
+                    return str(result)
+                preview = result[:max_rows]
+                return (
+                    f"{preview}\n... ({len(result)} total rows, showing first {max_rows})"
+                )
+            if isinstance(result, dict) and "preview" in result:
+                preview = result.get("preview")
+                total = result.get("total_rows")
+                note = result.get("note", "")
+                return f"{preview}\n... ({total} total rows) {note}"
+            return str(result)
+        except Exception:
+            return str(result)
     
     def generate_sql(self, question: str) -> str:
         """
@@ -376,6 +538,7 @@ class NL2SQLService:
         question: str,
         use_dynamic_selector: bool = True,
         k: int = 2,
+        messages: Optional[List] = None,
     ) -> str:
         """
         Generate SQL using few-shot examples to guide the model.
@@ -384,6 +547,7 @@ class NL2SQLService:
             question: Natural language question
             use_dynamic_selector: Whether to select examples dynamically
             k: Number of examples to select when dynamic selection is enabled
+            messages: Prior chat messages for conversational memory
         
         Returns:
             str: Generated SQL query
@@ -394,15 +558,21 @@ class NL2SQLService:
         prompt = self.build_few_shot_prompt(
             use_dynamic_selector=use_dynamic_selector,
             k=k,
+            include_messages=messages is not None,
         )
         try:
             logger.info("Generating SQL with few-shot examples")
             chain = prompt | self.llm | StrOutputParser()
             table_names = self._select_relevant_tables(question, top_k=k)
             table_info = self._format_table_context(table_names)
-            generated_query = chain.invoke(
-                {"input": question, "table_info": table_info, "top_k": k}
-            )
+            payload = {
+                "input": question,
+                "table_info": table_info,
+                "top_k": k,
+            }
+            if messages is not None:
+                payload["messages"] = messages
+            generated_query = chain.invoke(payload)
             logger.info("SQL query generated with few-shot examples")
             return generated_query
         except Exception as exc:
@@ -414,6 +584,7 @@ class NL2SQLService:
         question: str,
         use_dynamic_selector: bool = True,
         k: int = 2,
+        history: Optional[ChatMessageHistory] = None,
     ) -> dict:
         """
         Generate SQL with few-shot examples, execute it, and return results.
@@ -422,6 +593,7 @@ class NL2SQLService:
             question: Natural language question
             use_dynamic_selector: Whether to use dynamic example selection
             k: Number of examples to select when dynamic selection is enabled
+            history: Optional chat history for conversational memory
         
         Returns:
             dict: Dictionary containing 'sql', 'result', and 'answer'
@@ -430,27 +602,52 @@ class NL2SQLService:
             question,
             use_dynamic_selector=use_dynamic_selector,
             k=k,
+            messages=history.messages if history else None,
         )
         result = self.execute_query(sql_query)
-        answer = self.rephrase_answer(question, sql_query, result)
+        q_lower = question.lower().strip()
+        is_list_all = q_lower.startswith("list ") or q_lower.startswith("show all") or "list all " in q_lower
+
+        summarized = self._summarize_result(
+            result,
+            max_rows=MAX_RESULT_ROWS,
+            max_length=MAX_RESULT_LENGTH,
+        )
+
+        if is_list_all and isinstance(result, (list, tuple)) and len(result) > MAX_RESULT_ROWS:
+            total_rows = len(result)
+            answer = (
+                f"The query returned {total_rows} rows. "
+                f"Full results are available below; only a preview is summarized here."
+            )
+        else:
+            answer = self.rephrase_answer(question, sql_query, summarized)
+        if history is not None:
+            history.add_user_message(question)
+            history.add_ai_message(answer)
         return {"sql": sql_query, "result": result, "answer": answer}
 
-    def rephrase_answer(self, question: str, sql_query: str, result: str) -> str:
+    def rephrase_answer(self, question: str, sql_query: str, result: object) -> str:
         """
         Convert raw SQL results into a concise natural language answer.
         
         Args:
             question: Original user question
             sql_query: Generated SQL query
-            result: Raw SQL execution result
+            result: Raw SQL execution result (may be pre-summarized)
             
         Returns:
             str: Rephrased, user-friendly answer
         """
         try:
             logger.info("Rephrasing SQL result for user-friendly answer")
+            
             response = (ANSWER_PROMPT | self.llm | StrOutputParser()).invoke(
-                {"question": question, "query": sql_query, "result": result}
+                {
+                    "question": question,
+                    "query": sql_query,
+                    "result": result,
+                }
             )
             logger.info("Rephrasing completed successfully")
             return response
@@ -470,7 +667,12 @@ class NL2SQLService:
         """
         sql_query = self.generate_sql(question)
         result = self.execute_query(sql_query)
-        answer = self.rephrase_answer(question, sql_query, result)
+        summarized = self._summarize_result(
+            result,
+            max_rows=MAX_RESULT_ROWS,
+            max_length=MAX_RESULT_LENGTH,
+        )
+        answer = self.rephrase_answer(question, sql_query, summarized)
         return {"sql": sql_query, "result": result, "answer": answer}
 
 
@@ -581,14 +783,15 @@ def interactive_query_runner(db: SQLDatabase) -> None:
         print("  1) Run first query demo (includes additional samples)")
         print("  2) Run refined query with your own question")
         print("  3) Run refined query with few-shot guidance")
-        print("  4) Exit interactive mode")
+        print("  4) Run few-shot guidance with conversational memory")
+        print("  5) Exit interactive mode")
         print("-"*60)
         print("Type the option number or 'exit'/'q' to quit.\n")
         
         while True:
-            choice = input("Select an option [1/2/3/4]: ").strip().lower()
+            choice = input("Select an option [1/2/3/4/5]: ").strip().lower()
             
-            if choice in {"4", "exit", "q", "quit"}:
+            if choice in {"5", "exit", "q", "quit"}:
                 print("Exiting interactive mode.")
                 logger.info("Interactive mode exited by user")
                 break
@@ -610,7 +813,7 @@ def interactive_query_runner(db: SQLDatabase) -> None:
                     print(response["sql"])
                     print("-"*60)
                     print("Raw Query Results:")
-                    print(response["result"])
+                    print(nl2sql_service._format_display_result(response["result"]))
                     print("-"*60)
                     print("Rephrased Answer:")
                     print(response["answer"])
@@ -635,7 +838,7 @@ def interactive_query_runner(db: SQLDatabase) -> None:
                     print(response["sql"])
                     print("-"*60)
                     print("Raw Query Results:")
-                    print(response["result"])
+                    print(nl2sql_service._format_display_result(response["result"]))
                     print("-"*60)
                     print("Rephrased Answer:")
                     print(response["answer"])
@@ -647,7 +850,56 @@ def interactive_query_runner(db: SQLDatabase) -> None:
                     print(f"Error executing few-shot query: {exc}")
                 continue
             
-            print("Invalid selection. Please choose 1, 2, 3, or 4 (or 'exit').")
+            if choice == "4":
+                question = input(
+                    f"Enter your question for few-shot with memory (default: {REFINED_TEST_QUESTION}): "
+                ).strip()
+                if not question:
+                    question = REFINED_TEST_QUESTION
+                chat_history = ChatMessageHistory()
+                try:
+                    response = nl2sql_service.process_question_few_shot(
+                        question,
+                        history=chat_history,
+                    )
+                    
+                    print("\nGenerated SQL Query (few-shot with memory):")
+                    print(response["sql"])
+                    print("-"*60)
+                    print("Raw Query Results:")
+                    print(nl2sql_service._format_display_result(response["result"]))
+                    print("-"*60)
+                    print("Rephrased Answer:")
+                    print(response["answer"])
+                    print("="*60 + "\n")
+                    
+                    logger.info("Interactive few-shot with memory executed successfully")
+                    
+                    while True:
+                        follow_up = input(
+                            "Ask a follow-up (or press Enter to finish this session): "
+                        ).strip()
+                        if not follow_up:
+                            break
+                        follow_resp = nl2sql_service.process_question_few_shot(
+                            follow_up,
+                            history=chat_history,
+                        )
+                        print("\nGenerated SQL Query (few-shot with memory):")
+                        print(follow_resp["sql"])
+                        print("-"*60)
+                        print("Raw Query Results:")
+                        print(nl2sql_service._format_display_result(follow_resp["result"]))
+                        print("-"*60)
+                        print("Rephrased Answer:")
+                        print(follow_resp["answer"])
+                        print("="*60 + "\n")
+                except Exception as exc:
+                    logger.error(f"Interactive few-shot with memory failed: {exc}")
+                    print(f"Error executing few-shot with memory: {exc}")
+                continue
+            
+            print("Invalid selection. Please choose 1, 2, 3, 4, or 5 (or 'exit').")
     except Exception as exc:
         logger.error(f"Interactive query runner encountered an error: {exc}")
 

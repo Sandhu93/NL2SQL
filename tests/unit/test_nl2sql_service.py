@@ -210,7 +210,6 @@ class TestNL2SQLService:
         
         nl2sql_service._select_relevant_tables = MagicMock(return_value=["customers"])
         nl2sql_service._format_table_context = MagicMock(return_value="table info")
-        nl2sql_service._build_semantic_selector = MagicMock()
         
         with patch('app.services.nl2sql_service.StrOutputParser') as mock_parser:
             mock_parser.return_value = MagicMock()
@@ -221,7 +220,6 @@ class TestNL2SQLService:
         mock_chain.invoke.assert_called_once()
         nl2sql_service._select_relevant_tables.assert_called_once_with(question, top_k=2)
         nl2sql_service._format_table_context.assert_called_once_with(["customers"])
-        nl2sql_service._build_semantic_selector.assert_called_once()
 
 
 class TestNL2SQLServiceErrorHandling:
@@ -326,7 +324,7 @@ class TestInteractiveQueryRunner:
         with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
              patch('app.services.nl2sql_service.logger') as mock_logger, \
              patch('builtins.print'), \
-             patch('builtins.input', side_effect=["4"]):
+             patch('builtins.input', side_effect=["5"]):
             
             interactive_query_runner(mock_sql_database)
         
@@ -373,4 +371,33 @@ class TestInteractiveQueryRunner:
             interactive_query_runner(mock_sql_database)
         
         mock_service.process_question_few_shot.assert_called_once()
+        mock_logger.info.assert_called()
+
+    def test_interactive_memory_option(self, mock_sql_database):
+        """Ensure few-shot with memory path is invoked via option 4 and collects follow-ups."""
+        few_shot_result = {
+            "sql": "SELECT COUNT(*) FROM customers WHERE orderCount > 5",
+            "result": [{"count": 2}],
+            "answer": "There are 2 customers with an order count over 5."
+        }
+        follow_up_result = {
+            "sql": "SELECT customerName FROM customers WHERE orderCount > 5",
+            "result": [{"customerName": "Mini Gifts"}],
+            "answer": "The customers are Mini Gifts.",
+        }
+        with patch('app.services.nl2sql_service.NL2SQLService') as mock_service_cls, \
+             patch('app.services.nl2sql_service.logger') as mock_logger, \
+             patch('builtins.print'), \
+             patch('builtins.input', side_effect=["4", "question here", "follow up", "", "exit"]):
+            
+            mock_service = MagicMock()
+            mock_service.process_question_few_shot.side_effect = [
+                few_shot_result,
+                follow_up_result,
+            ]
+            mock_service_cls.return_value = mock_service
+            
+            interactive_query_runner(mock_sql_database)
+        
+        assert mock_service.process_question_few_shot.call_count == 2
         mock_logger.info.assert_called()
