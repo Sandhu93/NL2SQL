@@ -18,6 +18,7 @@ from typing import List, Optional
 # LangChain / OpenAI imports
 from langchain.chains import create_sql_query_chain
 from langchain.chains.openai_tools import create_extraction_chain_pydantic
+from langchain_community.vectorstores import FAISS
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_core.example_selectors import SemanticSimilarityExampleSelector
@@ -121,7 +122,7 @@ class NL2SQLService:
     def build_few_shot_prompt(
         self,
         examples: Optional[List[dict]] = None,
-        use_dynamic_selector: bool = False,
+        use_dynamic_selector: bool = True,
         k: int = 2,
     ) -> ChatPromptTemplate:
         """
@@ -129,7 +130,7 @@ class NL2SQLService:
         
         Args:
             examples: Optional list of example dicts with 'input' and 'query'.
-            use_dynamic_selector: Whether to use semantic similarity selection.
+            use_dynamic_selector: Whether to use semantic similarity selection (vectorstore-backed).
             k: Number of examples to select when using dynamic selector.
         
         Returns:
@@ -144,13 +145,7 @@ class NL2SQLService:
         )
         
         if use_dynamic_selector:
-            # Dynamic selector placeholder; enables future semantic similarity selection.
-            selector = SemanticSimilarityExampleSelector.from_examples(
-                selected_examples,
-                OpenAIEmbeddings(),
-                k=k,
-                input_keys=["input"],
-            )
+            selector = self._build_semantic_selector(selected_examples, k=k)
             few_shot = FewShotChatMessagePromptTemplate(
                 example_prompt=example_prompt,
                 example_selector=selector,
@@ -208,6 +203,27 @@ class NL2SQLService:
         except Exception as exc:
             logger.error(f"Failed to load table metadata: {exc}")
         return metadata
+
+    def _build_semantic_selector(self, examples: List[dict], k: int = 2) -> SemanticSimilarityExampleSelector:
+        """
+        Build a semantic similarity example selector using FAISS vectorstore.
+        
+        Args:
+            examples: Few-shot examples containing 'input' and 'query'.
+            k: Number of examples to retrieve.
+        
+        Returns:
+            SemanticSimilarityExampleSelector: Selector configured with vectorstore.
+        """
+        texts = [
+            f"Question: {item['input']}\nSQL: {item['query']}" for item in examples
+        ]
+        embeddings = OpenAIEmbeddings()
+        vectorstore = FAISS.from_texts(texts, embeddings, metadatas=examples)
+        selector = SemanticSimilarityExampleSelector.from_vectorstore(
+            vectorstore, k=k
+        )
+        return selector
 
     def _table_details_text(self) -> str:
         """
@@ -358,7 +374,7 @@ class NL2SQLService:
     def generate_sql_with_examples(
         self,
         question: str,
-        use_dynamic_selector: bool = False,
+        use_dynamic_selector: bool = True,
         k: int = 2,
     ) -> str:
         """
@@ -396,7 +412,7 @@ class NL2SQLService:
     def process_question_few_shot(
         self,
         question: str,
-        use_dynamic_selector: bool = False,
+        use_dynamic_selector: bool = True,
         k: int = 2,
     ) -> dict:
         """

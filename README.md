@@ -37,10 +37,11 @@ This tutorial covers building production-ready NL2SQL systems from basics to adv
    - Improving model understanding with curated examples
    - Building dynamic few-shot prompts with system context
 
-4. **Dynamic Few-Shot Example Selection**
+4. **Dynamic Few-Shot Example Selection** ✅ Implemented
    - Semantic similarity-based example selection
-   - Using vector embeddings (ChromaDB/FAISS) for context matching
+   - Using vector embeddings (FAISS) for context matching
    - Tailoring examples to query context automatically
+   - SemanticSimilarityExampleSelector with OpenAI embeddings
 
 5. **Dynamic Relevant Table Selection** ✅ Implemented
    - Optimizing for databases with 100+ tables
@@ -208,6 +209,7 @@ NL2SQL_tutorial/
 - RunnablePassthrough chain integration
 - Few-shot learning with curated examples
 - Dynamic prompt building with example selectors
+- Semantic similarity-based example selection with FAISS
 - Dynamic table selection with metadata filtering
 - CSV-based table metadata loading
 
@@ -438,6 +440,8 @@ Check the application logs (`nl2sql.log`) for detailed error messages about miss
 - **RunnablePassthrough Chains**: Streamlined query-to-answer pipeline
 - **Few-Shot Learning**: Curated example queries improve SQL generation accuracy
 - **FewShotChatMessagePromptTemplate**: LangChain few-shot prompt integration
+- **Dynamic Few-Shot Example Selection**: Semantic similarity-based example retrieval using FAISS vectorstore
+- **SemanticSimilarityExampleSelector**: Intelligent context-aware example selection with OpenAI embeddings
 - **Dynamic Table Selection**: LLM-powered table filtering from CSV metadata
 - **Table Metadata Loading**: CSV-based table descriptions and column information
 - **Pydantic Model Extraction**: Structured table selection with create_extraction_chain_pydantic
@@ -565,6 +569,9 @@ This project includes comprehensive development documentation:
 - Few-shot learning with curated example queries (4 examples covering various SQL patterns).
 - FewShotChatMessagePromptTemplate integration for guided SQL generation.
 - Dynamic prompt building with example selectors (static and semantic similarity ready).
+- Dynamic few-shot example selection using semantic similarity with FAISS vectorstore.
+- SemanticSimilarityExampleSelector with OpenAI embeddings for intelligent example matching.
+- Automatic context-aware example retrieval based on query similarity.
 - Dynamic table selection using LLM extraction from CSV metadata.
 - Table metadata loading from `classicmodels_tables_llm.csv` with descriptions and important columns.
 - Intelligent table filtering with Pydantic models (create_extraction_chain_pydantic).
